@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOBNA WAVE GENERATOR</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e2e8f0;
+        }
+
+        .key-white {
+            background: white;
+            color: #1a1a2e;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .key-black {
+            background: #1a1a2e;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            z-index: 2;
+            position: absolute;
+            width: 8px; /* Slightly thinner than white keys */
+            height: 60%; /* Shorter than white keys */
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        /* Total width is divided by 7 white keys, so each white key is ~14.28% wide.
+           Black keys are positioned relative to their adjacent white keys. */
+        [data-note="C#3"] {
+            left: 94.2%;  /* Between C (0%) and D (18.28%) + 20% + 20% + 20% + 40% */
+        }
+
+        [data-note="D#3"] {
+            left: 108.5%;  /* Between D (14.28%) and E (28.56%) + 20% + 20% + 20% + 40% */
+        }
+
+        /* No black key between E and F */
+
+        [data-note="F#3"] {
+            left: 76.1%;  /* Between F (42.84%) and G (57.12%) + 20% */
+        }
+
+        [data-note="G#3"] {
+            left: 90.3%;  /* Between G (57.12%) and A (71.40%) + 20% */
+        }
+
+        [data-note="A#3"] {
+            left: 104.5%;  /* Between A (71.40%) and B (85.68%) + 20% */
+        }
+
+        .key-active {
+            background: #4fd1c5;
+            transform: translateY(2px);
+            box-shadow: 0 2px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .key-white.key-active {
+            color: white;
+        }
+
+        .knob {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #2d3748, #1a202c);
+            box-shadow: 5px 5px 10px #0f1724, -5px -5px 10px #2d3748;
+            position: relative;
+        }
+
+        .knob-indicator {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #4fd1c5;
+            border-radius: 50%;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .wave-display {
+            background: rgba(26, 32, 44, 0.7);
+            border: 2px solid #4fd1c5;
+            border-radius: 8px;
+            height: 120px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .wave-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .glow-effect {
+            box-shadow: 0 0 15px rgba(79, 209, 197, 0.5);
+        }
+
+        .slider-track {
+            -webkit-appearance: none;
+            height: 6px;
+            background: #2d3748;
+            border-radius: 3px;
+        }
+
+        .slider-track::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4fd1c5;
+            cursor: pointer;
+        }
+
+        #square-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Remove the dot */
+        .key-white::after,
+        .key-black::after {
+            display: none;
+        }
+
+        .key-white.key-active::after,
+        .key-black.key-active::after {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="max-w-4xl w-full bg-gray-800 rounded-xl p-6 shadow-2xl border border-gray-700">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-teal-400 rounded-lg flex items-center justify-center mr-3 glow-effect">
+                    <i class="fas fa-wave-square text-2xl text-gray-900"></i>
+                </div>
+                <h1 class="text-3xl font-bold text-teal-400 tracking-wider">KOBNA WAVE GENERATOR</h1>
+            </div>
+            <div class="text-sm text-gray-400">
+                <span id="current-note" class="text-xl font-bold text-teal-400">-</span>
+                <span id="current-frequency" class="ml-2">0 Hz</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="space-y-6">
+                <div class="wave-display">
+                    <canvas id="wave-canvas" class="wave-canvas"></canvas>
+                </div>
+
+                <div class="bg-gray-700 p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-sm font-medium text-gray-300">VOLUME</label>
+                        <span id="volume-value" class="text-teal-400 font-mono">0.3</span>
+                    </div>
+                    <input type="range" id="volume" min="0" max="0.5" step="0.01" value="0.3" class="w-full slider-track">
+                </div>
+
+                <div class="bg-gray-700 p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-sm font-medium text-gray-300">PITCH</label>
+                        <span id="pitch-value" class="text-teal-400 font-mono">0</span>
+                    </div>
+                    <input type="range" id="pitch" min="-12" max="12" step="1" value="0" class="w-full slider-track">
+                </div>
+
+                <div class="bg-gray-700 p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-sm font-medium text-gray-300">OCTAVES</label>
+                        <span id="octave-value" class="text-teal-400 font-mono">0</span>
+                    </div>
+                    <input type="range" id="octave" min="-3" max="3" step="1" value="0" class="w-full slider-track">
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-gray-700 p-4 rounded-lg">
+                    <h3 class="text-center text-lg font-medium text-gray-300 mb-4">ADSR ENVELOPE</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-center text-gray-400 mb-1">ATTACK</label>
+                            <div class="flex justify-center">
+                                <input type="range" id="attack-knob" min="0" max="1" step="0.1" value="0.1" class="knob">
+                            </div>
+                            <div class="text-center mt-2">
+                                <span id="attack-value" class="text-xs text-teal-400 font-mono">0.1s</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs text-center text-gray-400 mb-1">DECAY</label>
+                            <div class="flex justify-center">
+                                <input type="range" id="decay-knob" min="0" max="1" step="0.1" value="0.3" class="knob">
+                            </div>
+                            <div class="text-center mt-2">
+                                <span id="decay-value" class="text-xs text-teal-400 font-mono">0.3s</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs text-center text-gray-400 mb-1">SUSTAIN</label>
+                            <div class="flex justify-center">
+                                <input type="range" id="sustain-knob" min="0" max="1" step="0.1" value="0.7" class="knob">
+                            </div>
+                            <div class="text-center mt-2">
+                                <span id="sustain-value" class="text-xs text-teal-400 font-mono">0.7</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs text-center text-gray-400 mb-1">RELEASE</label>
+                            <div class="flex justify-center">
+                                <input type="range" id="release-knob" min="0" max="1" step="0.1" value="0.5" class="knob">
+                            </div>
+                            <div class="text-center mt-2">
+                                <span id="release-value" class="text-xs text-teal-400 font-mono">0.5s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-700 p-4 rounded-lg">
+                    <h3 class="text-center text-lg font-medium text-gray-300 mb-4">WAVE TYPE</h3>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="sine-btn" class="py-2 px-3 bg-teal-600 rounded-md text-sm font-medium glow-effect">SINE</button>
+                        <button id="square-btn" class="py-2 px-3 bg-gray-600 rounded-md text-sm font-medium">SQUARE</button>
+                        <button id="sawtooth-btn" class="py-2 px-3 bg-gray-600 rounded-md text-sm font-medium">SAW</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-gray-700 p-4 rounded-lg h-full">
+                    <h3 class="text-center text-lg font-medium text-gray-300 mb-4">ONE OCTAVE KEYBOARD</h3>
+                    <div class="relative h-48">
+                        <!-- White Keys -->
+                        <div class="flex h-full">
+                            <div data-note="C3" class="key-white flex-1 border-r border-gray-300 rounded-b-md flex flex-col justify-end items-center pb-2 cursor-pointer"></div>
+                            <div data-note="D3" class="key-white flex-1 border-r border-gray-300 rounded-b-md flex flex-col justify-end items-center pb-2 cursor-pointer"></div>
+                            <div data-note="E3" class="key-white flex-1 border-r border-gray-300 rounded-b-md flex flex-col justify-end items-center pb-2 cursor-pointer"></div>
+                            <div data-note="F3" class="key-white flex-1 border-r border-gray-300 rounded-b-md flex flex-col justify-end items-center pb-2 cursor-pointer"></div>
+                            <div data-note="G3" class="key-white flex-1 border-r border-gray-300 rounded-b-md flex flex-col justify-end items-center pb-2 cursor-pointer"></div>
+                            <div data-note="A3" class="key-white flex-1 border-r border-gray-300 rounded-b-md flex flex-col justify-end items-center pb-2 cursor-pointer"></div>
+                            <div data-note="B3" class="key-white flex-1 rounded-b-md flex flex-col justify-end items-center pb-2 cursor-pointer"></div>
+                        </div>
+
+                        <!-- Black Keys -->
+                        <div class="absolute top-0 left-0 w-full h-2/3 flex px-4 pointer-events-none">
+                            <!-- Group of 2 black keys (C#3, D#3) -->
+                            <div class="flex-1 relative">
+                                <div data-note="C#3" class="key-black w-8 h-full absolute right-0 -ml-4 rounded-b-md cursor-pointer pointer-events-auto"></div>
+                            </div>
+                            <div class="flex-1 relative">
+                                <div data-note="D#3" class="key-black w-8 h-full absolute right-0 -ml-4 rounded-b-md cursor-pointer pointer-events-auto"></div>
+                            </div>
+                            <!-- Gap between E and F (no black key) -->
+                            <div class="flex-1 relative"></div>
+                            <!-- Group of 3 black keys (F#3, G#3, A#3) -->
+                            <div class="flex-1 relative">
+                                <div data-note="F#3" class="key-black w-8 h-full absolute right-0 -ml-4 rounded-b-md cursor-pointer pointer-events-auto"></div>
+                            </div>
+                            <div class="flex-1 relative">
+                                <div data-note="G#3" class="key-black w-8 h-full absolute right-0 -ml-4 rounded-b-md cursor-pointer pointer-events-auto"></div>
+                            </div>
+                            <div class="flex-1 relative">
+                                <div data-note="A#3" class="key-black w-8 h-full absolute right-0 -ml-4 rounded-b-md cursor-pointer pointer-events-auto"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button id="keyboard-toggle" class="py-2 px-4 bg-gray-600 rounded-md text-sm font-medium w-full">
+                            <i class="fas fa-keyboard mr-2"></i>Computer Keys
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 text-center text-xs text-gray-500">
+            <p>KOBNA WAVE GENERATOR v1.0 | © 2025 Kobna Sound Systems</p>
+        </div>
+    </div>
+
+    <script>
+        // Audio Context Setup
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioContext = new AudioContext();
+
+        // Global Variables
+        let activeNotes = {};
+        let currentWaveType = 'sine';
+        let keyboardEnabled = true;
+
+        // Note frequencies for one octave (C3 to C4) with correct chromatic scale
+        const noteFrequencies = {
+            'C3': 130.81,
+            'C#3': 138.59,
+            'D3': 146.83,
+            'D#3': 155.56,
+            'E3': 164.81,
+            'F3': 174.61,
+            'F#3': 185.00,
+            'G3': 196.00,
+            'G#3': 207.65,
+            'A3': 220.00,
+            'A#3': 233.08,
+            'B3': 246.94,
+            'C4': 261.63
+        };
+
+        // Computer keyboard mapping
+        const keyMap = {
+            'a': 'C3',
+            'w': 'C#3',
+            's': 'D3',
+            'e': 'D#3',
+            'd': 'E3',
+            'f': 'F3',
+            't': 'F#3',
+            'g': 'G3',
+            'y': 'G#3',
+            'h': 'A3',
+            'u': 'A#3',
+            'j': 'B3',
+            'k': 'C4'
+        };
+
+        // ADSR parameters
+        let adsrParams = {
+            attack: 0.1,
+            decay: 0.3,
+            sustain: 0.7,
+            release: 0.5
+        };
+
+        // DOM Elements
+        const volumeSlider = document.getElementById('volume');
+        const volumeValue = document.getElementById('volume-value');
+        const pitchSlider = document.getElementById('pitch');
+        const pitchValue = document.getElementById('pitch-value');
+        const currentNoteDisplay = document.getElementById('current-note');
+        const currentFrequencyDisplay = document.getElementById('current-frequency');
+        const keyboardToggle = document.getElementById('keyboard-toggle');
+
+        // ADSR Controls
+        const updateADSR = () => {
+            adsrParams.attack = parseFloat(document.getElementById('attack-knob').value);
+            adsrParams.decay = parseFloat(document.getElementById('decay-knob').value);
+            adsrParams.sustain = parseFloat(document.getElementById('sustain-knob').value);
+            adsrParams.release = parseFloat(document.getElementById('release-knob').value);
+
+            document.getElementById('attack-value').textContent = `${adsrParams.attack}s`;
+            document.getElementById('decay-value').textContent = `${adsrParams.decay}s`;
+            document.getElementById('sustain-value').textContent = `${adsrParams.sustain}`;
+            document.getElementById('release-value').textContent = `${adsrParams.release}s`;
+        };
+
+        document.querySelectorAll('.knob').forEach(knob => {
+            knob.addEventListener('input', updateADSR);
+        });
+
+        // Function to draw sound waves on the canvas
+        const waveCanvas = document.getElementById('wave-canvas');
+        const ctx = waveCanvas.getContext('2d');
+
+        let animationFrameId = null;
+        let currentFrequency = 0;
+
+        function drawWave() {
+            const width = waveCanvas.width;
+            const height = waveCanvas.height;
+            ctx.clearRect(0, 0, width, height);
+            ctx.strokeStyle = '#4fd1c5';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            for (let x = 0; x < width; x++) {
+                const t = (x / width) * 2 * Math.PI;
+                let y;
+                if (currentWaveType === 'sine') {
+                    y = height / 2 + (height / 4) * Math.sin(t * currentFrequency / 100);
+                } else if (currentWaveType === 'square') {
+                    y = height / 2 + (height / 4) * (Math.sin(t * currentFrequency / 100) > 0 ? 1 : -1);
+                } else if (currentWaveType === 'sawtooth') {
+                    y = height / 2 + (height / 4) * (2 * (t * currentFrequency / 100 / (2 * Math.PI)) - 1);
+                }
+                ctx.lineTo(x, y);
+            }
+
+            ctx.stroke();
+
+            // Continue the animation
+            animationFrameId = requestAnimationFrame(drawWave);
+        }
+
+        // Update Wave Type Selection to draw the wave
+        document.getElementById('sine-btn').addEventListener('click', () => {
+            currentWaveType = 'sine';
+            document.getElementById('sine-btn').classList.add('glow-effect');
+            document.getElementById('square-btn').classList.remove('glow-effect');
+            document.getElementById('sawtooth-btn').classList.remove('glow-effect');
+            drawWave();
+        });
+
+        document.getElementById('square-btn').addEventListener('click', () => {
+            currentWaveType = 'square';
+            document.getElementById('square-btn').classList.add('glow-effect');
+            document.getElementById('sine-btn').classList.remove('glow-effect');
+            document.getElementById('sawtooth-btn').classList.remove('glow-effect');
+            drawWave();
+        });
+
+        document.getElementById('sawtooth-btn').addEventListener('click', () => {
+            currentWaveType = 'sawtooth';
+            document.getElementById('sawtooth-btn').classList.add('glow-effect');
+            document.getElementById('sine-btn').classList.remove('glow-effect');
+            document.getElementById('square-btn').classList.remove('glow-effect');
+            drawWave();
+        });
+
+        // Initialize with sine wave
+        drawWave();
+
+        // Keyboard Interaction
+        keyboardToggle.addEventListener('click', () => {
+            keyboardEnabled = !keyboardEnabled;
+            keyboardToggle.classList.toggle('bg-teal-600', keyboardEnabled);
+            keyboardToggle.classList.toggle('bg-gray-600', !keyboardEnabled);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (keyboardEnabled && keyMap[e.key]) {
+                playNote(keyMap[e.key]);
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (keyboardEnabled && keyMap[e.key]) {
+                stopNote(keyMap[e.key]);
+            }
+        });
+
+        // Volume and Pitch Controls
+        volumeSlider.addEventListener('input', () => {
+            volumeValue.textContent = volumeSlider.value;
+        });
+
+        pitchSlider.addEventListener('input', () => {
+            pitchValue.textContent = pitchSlider.value;
+        });
+
+        // Octave Control
+        const octaveSlider = document.getElementById('octave');
+        const octaveValue = document.getElementById('octave-value');
+
+        octaveSlider.addEventListener('input', () => {
+            octaveValue.textContent = octaveSlider.value;
+        });
+
+        // Function to play a note with octave shift
+        function playNote(note) {
+            if (activeNotes[note]) return; // Avoid playing the same note twice
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            const octaveShift = Math.pow(2, octaveSlider.value);
+            oscillator.type = currentWaveType;
+            oscillator.frequency.setValueAtTime(noteFrequencies[note] * octaveShift * Math.pow(2, pitchSlider.value / 12), audioContext.currentTime);
+
+            // ADSR Envelope
+            const now = audioContext.currentTime;
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(volumeSlider.value, now + adsrParams.attack); // Attack
+            gainNode.gain.linearRampToValueAtTime(volumeSlider.value * adsrParams.sustain, now + adsrParams.attack + adsrParams.decay); // Decay
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.start();
+            activeNotes[note] = { oscillator, gainNode };
+
+            // Update the wave visualization
+            currentFrequency = noteFrequencies[note] * octaveShift * Math.pow(2, pitchSlider.value / 12);
+            if (!animationFrameId) {
+                drawWave();
+            }
+
+            // Highlight the key
+            const key = document.querySelector(`[data-note="${note}"]`);
+            key.classList.add('key-active');
+
+            // Update UI
+            currentNoteDisplay.textContent = note;
+            currentFrequencyDisplay.textContent = `${noteFrequencies[note].toFixed(2)} Hz`;
+        }
+
+        // Function to stop a note
+        function stopNote(note) {
+            if (!activeNotes[note]) return;
+
+            const { oscillator, gainNode } = activeNotes[note];
+            const now = audioContext.currentTime;
+
+            // Release phase
+            gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+            gainNode.gain.linearRampToValueAtTime(0, now + adsrParams.release);
+
+            oscillator.stop(now + adsrParams.release);
+            delete activeNotes[note];
+
+            // Stop the wave visualization if no keys are pressed
+            if (Object.keys(activeNotes).length === 0) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+                ctx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+            }
+
+            // Remove highlight from the key
+            const key = document.querySelector(`[data-note="${note}"]`);
+            key.classList.remove('key-active');
+
+            // Update UI
+            currentNoteDisplay.textContent = '-';
+            currentFrequencyDisplay.textContent = '0 Hz';
+        }
+
+        // Remove the Panic Button
+        document.getElementById('panic-btn').remove();
+
+        // Update Description and Copyright
+        document.querySelector('.mt-6 p').textContent = 'KOBNA WAVE GENERATOR v1.0 | © 2025 Kobna Sound Systems';
+
+        // Add click event listeners to the keys
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.key-white, .key-black').forEach(key => {
+                key.addEventListener('mousedown', () => playNote(key.dataset.note));
+                key.addEventListener('mouseup', () => stopNote(key.dataset.note));
+                key.addEventListener('mouseleave', () => stopNote(key.dataset.note));
+            });
+        });
+    </script>
+</body>
+</html>
+        
